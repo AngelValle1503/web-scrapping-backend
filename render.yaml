@@ -7,7 +7,6 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /up
-    preDeployCommand: php artisan migrate --force --no-interaction
     envVars:
       - fromGroup: web-scrapping-shared
       - key: APP_ENV
