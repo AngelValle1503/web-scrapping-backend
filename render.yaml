@@ -34,4 +34,4 @@ envVarGroups:
   - name: web-scrapping-shared
     envVars:
       - key: APP_KEY
-        sync: false
+        generateValue: true
