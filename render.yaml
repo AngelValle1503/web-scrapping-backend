@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: web-scrapping-api
+    plan: 0.5c-512mb
+    runtime: docker
+    branch: production
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /up
+    preDeployCommand: php artisan migrate --force --no-interaction
+    envVars:
+      - fromGroup: web-scrapping-shared
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        sync: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: web-scrapping-db
+          property: connectionString
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FLARESOLVERR_URL
+        sync: false
+
+  - type: cron
+    name: web-scrapping-monitor
+    plan: 0.5c-512mb
+    runtime: docker
+    branch: production
+    schedule: "*/5 * * * *"
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: php artisan elements:check --no-interaction
+    envVars:
+      - fromGroup: web-scrapping-shared
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: web-scrapping-db
+          property: connectionString
+      - key: FLARESOLVERR_URL
+        sync: false
+
+databases:
+  - name: web-scrapping-db
+    plan: 256mb
+
+envVarGroups:
+  - name: web-scrapping-shared
+    envVars:
+      - key: APP_KEY
+        sync: false
