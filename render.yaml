@@ -55,7 +55,7 @@ services:
 
 databases:
   - name: web-scrapping-db
-    plan: 256mb
+    plan: 0.1c-256mb
 
 envVarGroups:
   - name: web-scrapping-shared
