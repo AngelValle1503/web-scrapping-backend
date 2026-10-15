@@ -14,8 +14,6 @@ services:
         value: production
       - key: APP_DEBUG
         value: "false"
-      - key: APP_URL
-        sync: false
       - key: LOG_CHANNEL
         value: stderr
       - key: DB_CONNECTION
