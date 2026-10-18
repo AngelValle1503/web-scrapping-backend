@@ -109,6 +109,110 @@ class HtmlInspectorService
 <script id="__antigravity_inspector_script">
 (function() {
     var inspectorActive = true;
+    var autoAcceptedCookieButtons = new WeakSet();
+
+    function normalizedText(value) {
+        return (value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function isCookieConsentContext(element) {
+        var contextPattern = /cookie|consent|gdpr|privacy|onetrust|didomi|quantcast|trustarc|cookiebot|usercentrics|iubenda|cookielaw|cmp/i;
+        var current = element;
+
+        for (var depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+            var metadata = [
+                current.id,
+                current.className,
+                current.getAttribute && current.getAttribute('role'),
+                current.getAttribute && current.getAttribute('aria-label'),
+                current.getAttribute && current.getAttribute('data-testid'),
+                current.getAttribute && current.getAttribute('data-cy'),
+            ].filter(Boolean).join(' ');
+
+            if (contextPattern.test(metadata)) return true;
+
+            // Some sites (including Eneba) generate opaque CSS class names. In
+            // those cases the explanatory text is the reliable consent signal.
+            // Only inspect compact ancestors to avoid treating the entire page as
+            // a cookie dialog merely because its footer mentions cookies.
+            var contextText = normalizedText(current.textContent);
+            if (contextText.length > 0 && contextText.length <= 2500 && contextPattern.test(contextText)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function cookieButtonLabel(element) {
+        return normalizedText(
+            element.getAttribute('aria-label') ||
+            element.getAttribute('value') ||
+            element.textContent
+        );
+    }
+
+    function isAcceptCookieButton(element) {
+        var acceptedLabels = [
+            'accept',
+            'accept all',
+            'accept cookies',
+            'accept all cookies',
+            'allow all',
+            'allow all cookies',
+            'aceptar',
+            'aceptar todo',
+            'aceptar todas',
+            'aceptar cookies',
+            'aceptar todas las cookies',
+            'aceptar y continuar',
+            'permitir todo',
+            'permitir todas',
+            'de acuerdo',
+            'entendido',
+            'aceitar',
+            'aceitar todos',
+            'accepter',
+            'tout accepter',
+        ];
+
+        return acceptedLabels.indexOf(cookieButtonLabel(element)) !== -1;
+    }
+
+    function autoAcceptCookieConsent() {
+        var candidates = document.querySelectorAll('button, [role="button"], a, input[type="button"], input[type="submit"]');
+
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (
+                autoAcceptedCookieButtons.has(candidate) ||
+                !isAcceptCookieButton(candidate) ||
+                !isCookieConsentContext(candidate)
+            ) continue;
+
+            autoAcceptedCookieButtons.add(candidate);
+            candidate.setAttribute('data-ag-cookie-auto-accept', 'true');
+            candidate.click();
+            window.parent.postMessage({ type: '__ANTIGRAVITY_COOKIES_ACCEPTED__' }, '*');
+            break;
+        }
+    }
+
+    function startCookieConsentAutomation() {
+        autoAcceptCookieConsent();
+        var observer = new MutationObserver(function() {
+            autoAcceptCookieConsent();
+        });
+
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        window.setTimeout(function() { observer.disconnect(); }, 15000);
+    }
+
     window.addEventListener('message', function(e) {
         if (e.data && e.data.type === '__TOGGLE_INSPECTOR__') {
             inspectorActive = !!e.data.active;
@@ -179,9 +283,10 @@ class HtmlInspectorService
 
         document.addEventListener('click', function(e) {
             if (!inspectorActive) return;
+            var target = e.target;
+            if (target && target.closest && target.closest('[data-ag-cookie-auto-accept]')) return;
             e.preventDefault();
             e.stopPropagation();
-            var target = e.target;
             if (!target || target === hoverBox || target === selectBox) return;
             var rect = target.getBoundingClientRect();
             selectBox.style.display = 'block';
@@ -216,9 +321,13 @@ class HtmlInspectorService
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initInspector);
+        document.addEventListener('DOMContentLoaded', function() {
+            initInspector();
+            startCookieConsentAutomation();
+        });
     } else {
         initInspector();
+        startCookieConsentAutomation();
     }
 })();
 </script>

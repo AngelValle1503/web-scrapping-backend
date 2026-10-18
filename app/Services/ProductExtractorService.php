@@ -22,14 +22,14 @@ class ProductExtractorService
         $url = trim($url);
         // Normalizar dominio de DDTech si el usuario ingresó ddtech.com.mx
         $url = preg_replace('/^(https?:\/\/)?(www\.)?ddtech\.com\.mx/i', '$1$2ddtech.mx', $url);
-        if (!preg_match('/^https?:\/\//i', $url)) {
-            $url = 'https://' . $url;
+        if (! preg_match('/^https?:\/\//i', $url)) {
+            $url = 'https://'.$url;
         }
 
         // 0. Si es de Mercado Libre, intentar primero mediante su servicio especializado de API
         if (str_contains(strtolower($url), 'mercadolibre')) {
             $meliData = $this->mercadoLibreService->fetchByUrl($url);
-            if ($meliData && !empty($meliData['price'])) {
+            if ($meliData && ! empty($meliData['price'])) {
                 return $meliData;
             }
         }
@@ -61,13 +61,13 @@ class ProductExtractorService
         // 1. Extraer mediante JSON-LD (Schema.org Product)
         $jsonLdData = $this->extractJsonLd($html);
         if ($jsonLdData) {
-            $data = array_merge($data, array_filter($jsonLdData, fn ($v) => !is_null($v)));
+            $data = array_merge($data, array_filter($jsonLdData, fn ($v) => ! is_null($v)));
         }
 
         // 2. Extraer mediante OpenGraph y Meta tags
         $metaData = $this->extractMetaTags($html);
         foreach ($metaData as $key => $val) {
-            if (empty($data[$key]) && !empty($val)) {
+            if (empty($data[$key]) && ! empty($val)) {
                 $data[$key] = $val;
             }
         }
@@ -75,13 +75,13 @@ class ProductExtractorService
         // 3. Fallbacks específicos por tienda o heurística
         $heuristicData = $this->extractHeuristics($html, $domainInfo['slug']);
         foreach ($heuristicData as $key => $val) {
-            if ($key === 'images' && !empty($val)) {
+            if ($key === 'images' && ! empty($val)) {
                 // Si la heurística de tienda encontró una galería completa (más imágenes que las genéricas de JSON-LD o metatags), priorizar la galería
                 if (count($val) > count($data['images'] ?? [])) {
                     $data['images'] = $val;
                     $data['image_url'] = $val[0];
                 }
-            } elseif (empty($data[$key]) && !empty($val)) {
+            } elseif (empty($data[$key]) && ! empty($val)) {
                 $data[$key] = $val;
             }
         }
@@ -98,17 +98,17 @@ class ProductExtractorService
         }
 
         // Si el nombre tiene sufijos de tienda (ej. " | Cyberpuerta.mx"), limpiarlo
-        if (!empty($data['name'])) {
+        if (! empty($data['name'])) {
             $data['name'] = html_entity_decode($data['name'], ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $data['name'] = trim(preg_replace('/\s*\|\s*(Cyberpuerta|Walmart|Mercado Libre|Amazon|Doto|DDTech|DD Tech).*$/i', '', $data['name']));
             $data['name'] = trim(preg_replace('/\s*-\s*(Cyberpuerta|Walmart|Mercado Libre|Amazon|Doto|DDTech|DD Tech).*$/i', '', $data['name']));
         }
 
         // Asegurar consistencia entre image_url e images
-        if (empty($data['images']) && !empty($data['image_url'])) {
+        if (empty($data['images']) && ! empty($data['image_url'])) {
             $data['images'] = [$data['image_url']];
         }
-        if (!empty($data['images']) && empty($data['image_url'])) {
+        if (! empty($data['images']) && empty($data['image_url'])) {
             $data['image_url'] = $data['images'][0];
         }
 
@@ -132,7 +132,7 @@ class ProductExtractorService
 
         if (empty($html)) {
             try {
-                $response = Http::withoutVerifying()->withHeaders([
+                $response = Http::withHeaders([
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                     'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                     'Accept-Language' => 'es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -211,52 +211,52 @@ class ProductExtractorService
         if (preg_match_all('/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $matches)) {
             foreach ($matches[1] as $jsonStr) {
                 $json = json_decode(trim($jsonStr), true);
-                if (!$json) {
+                if (! $json) {
                     continue;
                 }
 
                 $product = $this->findProductInJsonLd($json);
                 if ($product) {
-                    if (!empty($product['name'])) {
+                    if (! empty($product['name'])) {
                         $extracted['name'] = is_string($product['name']) ? $product['name'] : null;
                     }
-                    if (!empty($product['image'])) {
+                    if (! empty($product['image'])) {
                         $imgs = [];
                         if (is_array($product['image'])) {
                             foreach ($product['image'] as $im) {
                                 $u = is_array($im) ? ($im['url'] ?? null) : $im;
-                                if (is_string($u) && !empty($u)) {
+                                if (is_string($u) && ! empty($u)) {
                                     $imgs[] = $u;
                                 }
                             }
                         } elseif (is_string($product['image'])) {
                             $imgs[] = $product['image'];
                         }
-                        if (!empty($imgs)) {
+                        if (! empty($imgs)) {
                             $extracted['image_url'] = $imgs[0];
                             $extracted['images'] = array_values(array_unique($imgs));
                         }
                     }
-                    if (!empty($product['sku'])) {
+                    if (! empty($product['sku'])) {
                         $extracted['sku'] = (string) $product['sku'];
                     }
-                    if (!empty($product['gtin13']) || !empty($product['gtin12']) || !empty($product['gtin'])) {
+                    if (! empty($product['gtin13']) || ! empty($product['gtin12']) || ! empty($product['gtin'])) {
                         $extracted['gtin'] = (string) ($product['gtin13'] ?? $product['gtin12'] ?? $product['gtin'] ?? null);
                     }
-                    if (!empty($product['brand'])) {
+                    if (! empty($product['brand'])) {
                         $extracted['brand'] = is_array($product['brand']) ? ($product['brand']['name'] ?? null) : (string) $product['brand'];
                     }
-                    if (!empty($product['model'])) {
+                    if (! empty($product['model'])) {
                         $extracted['model'] = is_array($product['model']) ? ($product['model']['name'] ?? null) : (string) $product['model'];
                     }
 
                     // Offers
-                    if (!empty($product['offers'])) {
+                    if (! empty($product['offers'])) {
                         $offers = is_array($product['offers']) && isset($product['offers'][0]) ? $product['offers'][0] : $product['offers'];
                         if (isset($offers['price'])) {
                             $extracted['price'] = (float) $offers['price'];
                         }
-                        if (!empty($offers['priceCurrency'])) {
+                        if (! empty($offers['priceCurrency'])) {
                             $extracted['currency'] = (string) $offers['priceCurrency'];
                         }
                         if (isset($offers['availability'])) {
@@ -265,7 +265,7 @@ class ProductExtractorService
                         }
                     }
 
-                    if (!empty($extracted['name']) && !empty($extracted['price'])) {
+                    if (! empty($extracted['name']) && ! empty($extracted['price'])) {
                         break;
                     }
                 }
@@ -280,7 +280,7 @@ class ProductExtractorService
      */
     private function findProductInJsonLd(mixed $data): ?array
     {
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return null;
         }
 
@@ -379,7 +379,7 @@ class ProductExtractorService
                 }
             }
 
-            if (!empty($cpGallery)) {
+            if (! empty($cpGallery)) {
                 $data['images'] = array_values(array_unique($cpGallery));
                 if (empty($data['image_url'])) {
                     $data['image_url'] = $data['images'][0];
@@ -406,7 +406,7 @@ class ProductExtractorService
                     $cleanImg = preg_replace('/-[A-Z]\.(webp|jpg)$/i', '-O.webp', $mImg);
                     $highRes[] = $cleanImg;
                 }
-                if (!empty($highRes)) {
+                if (! empty($highRes)) {
                     $data['images'] = array_values(array_slice(array_unique($highRes), 0, 8));
                     if (empty($data['image_url'])) {
                         $data['image_url'] = $data['images'][0];
@@ -430,7 +430,7 @@ class ProductExtractorService
                 $uniqueCoppel = array_values(array_unique($coppelImgs[0]));
                 natsort($uniqueCoppel);
                 $uniqueCoppel = array_values($uniqueCoppel);
-                if (!empty($uniqueCoppel)) {
+                if (! empty($uniqueCoppel)) {
                     $data['images'] = $uniqueCoppel;
                     $data['image_url'] = $uniqueCoppel[0];
                 }
@@ -471,7 +471,7 @@ class ProductExtractorService
 
             // Marca
             if (empty($data['brand'])) {
-                if (preg_match('/const\s+brand\s*=\s*["\']([^"\']+)["\']/i', $html, $m) && !empty($m[1])) {
+                if (preg_match('/const\s+brand\s*=\s*["\']([^"\']+)["\']/i', $html, $m) && ! empty($m[1])) {
                     $data['brand'] = trim($m[1]);
                 }
             }
@@ -494,12 +494,12 @@ class ProductExtractorService
                 $galleryBlock = $mBlock[1];
             }
 
-            if (!empty($galleryBlock)) {
+            if (! empty($galleryBlock)) {
                 // Remover stickers de tags-inside ("Nuevo", "Meses sin intereses", etc.)
                 $cleanGalleryBlock = preg_replace('/<div[^>]*class=["\'][^"\']*tags-inside[^"\']*["\'][^>]*>.*?<\/div>/is', '', $galleryBlock);
                 if (preg_match_all('/(?:href|src|data-echo)=["\'](https:\/\/ddtech\.mx\/assets\/uploads\/[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|webp))["\']/i', $cleanGalleryBlock, $allImgs)) {
                     foreach (array_unique($allImgs[1]) as $imgUrl) {
-                        if (!str_contains($imgUrl, 'blank.gif') && !str_contains($imgUrl, 'logo') && !str_contains($imgUrl, 'banner')) {
+                        if (! str_contains($imgUrl, 'blank.gif') && ! str_contains($imgUrl, 'logo') && ! str_contains($imgUrl, 'banner')) {
                             $galleryImgs[] = $imgUrl;
                         }
                     }
@@ -507,11 +507,11 @@ class ProductExtractorService
             }
 
             // Asegurar que la imagen principal (og:image) sea la primera si es válida
-            if (!empty($data['image_url']) && !in_array($data['image_url'], $galleryImgs)) {
+            if (! empty($data['image_url']) && ! in_array($data['image_url'], $galleryImgs)) {
                 array_unshift($galleryImgs, $data['image_url']);
             }
 
-            if (!empty($galleryImgs)) {
+            if (! empty($galleryImgs)) {
                 $data['images'] = array_values(array_unique($galleryImgs));
                 $data['image_url'] = $data['images'][0];
             }
@@ -539,6 +539,7 @@ class ProductExtractorService
         }
 
         $lower = strtolower($html);
+
         return str_contains($lower, 'just a moment...') ||
                str_contains($lower, 'cf-mitigated') ||
                str_contains($lower, 'challenge-platform') ||
@@ -551,7 +552,15 @@ class ProductExtractorService
      */
     private function solveWithFlareSolverr(string $url): ?string
     {
-        $flaresolverrUrl = 'http://127.0.0.1:8191/v1';
+        $flaresolverrUrl = rtrim((string) env('FLARESOLVERR_URL', ''), '/');
+
+        if ($flaresolverrUrl === '') {
+            return null;
+        }
+
+        if (! str_ends_with($flaresolverrUrl, '/v1')) {
+            $flaresolverrUrl .= '/v1';
+        }
         $sessionName = 'default_session';
 
         // 1. Asegurar sesión en FlareSolverr para reutilizar cookies de Cloudflare
@@ -575,7 +584,7 @@ class ProductExtractorService
 
             if ($response->successful()) {
                 $json = $response->json();
-                if (isset($json['solution']['response']) && !empty($json['solution']['response'])) {
+                if (isset($json['solution']['response']) && ! empty($json['solution']['response'])) {
                     return $json['solution']['response'];
                 }
             }
@@ -593,7 +602,7 @@ class ProductExtractorService
 
             if ($response->successful()) {
                 $json = $response->json();
-                if (isset($json['solution']['response']) && !empty($json['solution']['response'])) {
+                if (isset($json['solution']['response']) && ! empty($json['solution']['response'])) {
                     return $json['solution']['response'];
                 }
             }
