@@ -64,6 +64,14 @@ class HtmlInspectorService
         $html = preg_replace('/(top|parent)\.location/i', '/* framebuster neutralized */ window.location', $html);
         $html = preg_replace('/window\.top/i', 'window.self', $html);
 
+        // La vista previa inspecciona la captura HTML obtenida por el servidor, no
+        // ejecuta la aplicación original. Sus scripts se ejecutarían con el origen
+        // de Vercel dentro de srcDoc y sitios con Cloudflare (como Eneba) bloquean
+        // esas solicitudes por CORS. Al quitarlos mantenemos un DOM estable para
+        // seleccionar elementos y evitamos desafíos o modales que se rehidratan.
+        $html = preg_replace('/<script\b[^>]*>.*?<\/script\s*>/is', '', $html);
+        $html = preg_replace('/<script\b[^>]*\/\s*>/is', '', $html);
+
         // Inyectar estilos auxiliares y script de selección interactiva dentro del HTML
         $inspectorStylesAndScript = <<<'HTML'
 <style id="__antigravity_inspector_styles">
@@ -149,6 +157,29 @@ class HtmlInspectorService
         return false;
     }
 
+    function getCookieConsentContainer(element) {
+        var contextPattern = /cookie|consent|gdpr|privacy|onetrust|didomi|quantcast|trustarc|cookiebot|usercentrics|iubenda|cookielaw|cmp/i;
+        var current = element;
+        var container = null;
+
+        for (var depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+            var contextText = normalizedText(current.textContent);
+            if (contextText.length > 0 && contextText.length <= 2500 && contextPattern.test(contextText)) {
+                container = current;
+            }
+        }
+
+        return container;
+    }
+
+    function hideCookieConsentContainer(container) {
+        if (!container || !container.isConnected) return;
+        container.setAttribute('data-ag-cookie-consent-hidden', 'true');
+        container.style.setProperty('display', 'none', 'important');
+        container.style.setProperty('visibility', 'hidden', 'important');
+        container.style.setProperty('pointer-events', 'none', 'important');
+    }
+
     function cookieButtonLabel(element) {
         return normalizedText(
             element.getAttribute('aria-label') ||
@@ -197,7 +228,13 @@ class HtmlInspectorService
 
             autoAcceptedCookieButtons.add(candidate);
             candidate.setAttribute('data-ag-cookie-auto-accept', 'true');
+            var cookieContainer = getCookieConsentContainer(candidate);
             candidate.click();
+            // In a static preview there is no original application code listening
+            // for the click. Hide the confirmed consent dialog as a safe fallback.
+            window.setTimeout(function() {
+                hideCookieConsentContainer(cookieContainer);
+            }, 100);
             window.parent.postMessage({ type: '__ANTIGRAVITY_COOKIES_ACCEPTED__' }, '*');
             break;
         }

@@ -17,7 +17,7 @@ class HtmlInspectorServiceTest extends TestCase
 
             public function fetchHtml(string $url): string
             {
-                return '<html><head><title>Producto</title></head><body><div id="cookie-banner"><button>Aceptar todas</button></div></body></html>';
+                return '<html><head><title>Producto</title><script src="https://example.com/app.js"></script></head><body><div id="cookie-banner"><button>Aceptar todas</button></div></body></html>';
             }
         };
 
@@ -27,6 +27,8 @@ class HtmlInspectorServiceTest extends TestCase
         $this->assertStringContainsString('isCookieConsentContext', $preview['html']);
         $this->assertStringContainsString('contextText.length <= 2500', $preview['html']);
         $this->assertStringContainsString('data-ag-cookie-auto-accept', $preview['html']);
+        $this->assertStringContainsString('hideCookieConsentContainer', $preview['html']);
         $this->assertStringContainsString('Aceptar todas', $preview['html']);
+        $this->assertStringNotContainsString('https://example.com/app.js', $preview['html']);
     }
 }
