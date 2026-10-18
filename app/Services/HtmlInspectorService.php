@@ -135,6 +135,15 @@ class HtmlInspectorService
             ].filter(Boolean).join(' ');
 
             if (contextPattern.test(metadata)) return true;
+
+            // Some sites (including Eneba) generate opaque CSS class names. In
+            // those cases the explanatory text is the reliable consent signal.
+            // Only inspect compact ancestors to avoid treating the entire page as
+            // a cookie dialog merely because its footer mentions cookies.
+            var contextText = normalizedText(current.textContent);
+            if (contextText.length > 0 && contextText.length <= 2500 && contextPattern.test(contextText)) {
+                return true;
+            }
         }
 
         return false;

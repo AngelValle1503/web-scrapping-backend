@@ -25,6 +25,7 @@ class HtmlInspectorServiceTest extends TestCase
 
         $this->assertSame('Producto', $preview['title']);
         $this->assertStringContainsString('isCookieConsentContext', $preview['html']);
+        $this->assertStringContainsString('contextText.length <= 2500', $preview['html']);
         $this->assertStringContainsString('data-ag-cookie-auto-accept', $preview['html']);
         $this->assertStringContainsString('Aceptar todas', $preview['html']);
     }
