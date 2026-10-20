@@ -17,7 +17,9 @@ class HtmlInspectorServiceTest extends TestCase
 
             public function fetchHtml(string $url): string
             {
-                return '<html><head><title>Producto</title><script src="https://example.com/app.js"></script></head><body><div id="cookie-banner"><button>Aceptar todas</button></div></body></html>';
+                return <<<'HTML'
+<html><head><title>Producto</title><script src="https://example.com/app.js"></script><script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","offers":{"@type":"AggregateOffer","lowPrice":18.5,"priceCurrency":"USD"}}</script></head><body><div id="cookie-banner"><button>Aceptar todas</button></div></body></html>
+HTML;
             }
         };
 
@@ -28,7 +30,11 @@ class HtmlInspectorServiceTest extends TestCase
         $this->assertStringContainsString('contextText.length <= 2500', $preview['html']);
         $this->assertStringContainsString('data-ag-cookie-auto-accept', $preview['html']);
         $this->assertStringContainsString('hideCookieConsentContainer', $preview['html']);
+        $this->assertStringContainsString('id="__ag_detected_price"', $preview['html']);
+        $this->assertStringContainsString('USD 18.50', $preview['html']);
         $this->assertStringContainsString('Aceptar todas', $preview['html']);
         $this->assertStringNotContainsString('https://example.com/app.js', $preview['html']);
+        $this->assertSame('USD 18.50', (new HtmlInspectorService($extractor))->extractValueFromUrl('https://example.com/product', '#__ag_detected_price'));
+        $this->assertSame(18.5, $extractor->extractFromUrl('https://example.com/product')['price']);
     }
 }

@@ -8,6 +8,8 @@ use Symfony\Component\CssSelector\CssSelectorConverter;
 
 class HtmlInspectorService
 {
+    private const VIRTUAL_PRICE_SELECTOR = '#__ag_detected_price';
+
     protected ProductExtractorService $extractorService;
     protected CssSelectorConverter $selectorConverter;
 
@@ -32,6 +34,8 @@ class HtmlInspectorService
         if (empty($html)) {
             throw new \Exception('No se pudo descargar el contenido de la URL.');
         }
+
+        $structuredPrice = $this->extractStructuredPrice($html);
 
         // Extraer título de la página
         $title = 'Página Web';
@@ -71,6 +75,13 @@ class HtmlInspectorService
         // seleccionar elementos y evitamos desafíos o modales que se rehidratan.
         $html = preg_replace('/<script\b[^>]*>.*?<\/script\s*>/is', '', $html);
         $html = preg_replace('/<script\b[^>]*\/\s*>/is', '', $html);
+
+        if ($structuredPrice !== null) {
+            $priceLabel = htmlspecialchars($structuredPrice['currency'] . ' ' . number_format($structuredPrice['price'], 2, '.', ''), ENT_QUOTES, 'UTF-8');
+            $virtualPrice = '<div id="__ag_detected_price" data-ag-virtual-price="true" title="Precio obtenido de los datos estructurados publicados por la página">'
+                . '<span>Precio detectado</span><strong>' . $priceLabel . '</strong></div>';
+            $html = preg_replace('/(<body\b[^>]*>)/i', "$1\n" . $virtualPrice . "\n", $html, 1);
+        }
 
         // Inyectar estilos auxiliares y script de selección interactiva dentro del HTML
         $inspectorStylesAndScript = <<<'HTML'
@@ -112,6 +123,32 @@ class HtmlInspectorService
         background-color: rgba(16, 185, 129, 0.18) !important;
         box-shadow: 0 0 20px rgba(16, 185, 129, 0.5) !important;
         border-radius: 4px !important;
+    }
+    #__ag_detected_price {
+        position: fixed !important;
+        top: 14px !important;
+        right: 14px !important;
+        z-index: 2147483620 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 3px !important;
+        padding: 10px 14px !important;
+        border: 1px solid #34d399 !important;
+        border-radius: 8px !important;
+        background: #052e2b !important;
+        color: #ecfdf5 !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+        font-family: Arial, sans-serif !important;
+        cursor: crosshair !important;
+    }
+    #__ag_detected_price span {
+        color: #a7f3d0 !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+    }
+    #__ag_detected_price strong {
+        color: #ffffff !important;
+        font-size: 18px !important;
     }
 </style>
 <script id="__antigravity_inspector_script">
@@ -446,6 +483,71 @@ HTML;
             return null;
         }
 
+        if (trim($selector) === self::VIRTUAL_PRICE_SELECTOR) {
+            $price = $this->extractStructuredPrice($html);
+
+            return $price === null
+                ? null
+                : $price['currency'] . ' ' . number_format($price['price'], 2, '.', '');
+        }
+
         return $this->extractValueFromHtml($html, $selector, $attribute);
+    }
+
+    /**
+     * Obtiene el precio publicado en Product/Offer o Product/AggregateOffer JSON-LD.
+     * El selector virtual del inspector reutiliza esta fuente al monitorear la URL.
+     *
+     * @return array{price: float, currency: string}|null
+     */
+    private function extractStructuredPrice(string $html): ?array
+    {
+        if (!preg_match_all('/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $matches)) {
+            return null;
+        }
+
+        foreach ($matches[1] as $jsonString) {
+            $product = $this->findProductInJsonLd(json_decode(trim($jsonString), true));
+            if ($product === null || empty($product['offers'])) {
+                continue;
+            }
+
+            $offers = is_array($product['offers']) && isset($product['offers'][0])
+                ? $product['offers'][0]
+                : $product['offers'];
+            $value = $offers['price'] ?? $offers['lowPrice'] ?? null;
+
+            if (is_numeric($value)) {
+                return [
+                    'price' => (float) $value,
+                    'currency' => (string) ($offers['priceCurrency'] ?? 'USD'),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private function findProductInJsonLd(mixed $data): ?array
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+
+        $type = $data['@type'] ?? null;
+        if ($type === 'Product' || (is_array($type) && in_array('Product', $type, true))) {
+            return $data;
+        }
+
+        foreach ($data as $value) {
+            if (is_array($value)) {
+                $product = $this->findProductInJsonLd($value);
+                if ($product !== null) {
+                    return $product;
+                }
+            }
+        }
+
+        return null;
     }
 }

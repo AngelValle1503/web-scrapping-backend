@@ -253,8 +253,10 @@ class ProductExtractorService
                     // Offers
                     if (! empty($product['offers'])) {
                         $offers = is_array($product['offers']) && isset($product['offers'][0]) ? $product['offers'][0] : $product['offers'];
-                        if (isset($offers['price'])) {
-                            $extracted['price'] = (float) $offers['price'];
+                        // AggregateOffer (used by marketplaces such as Eneba)
+                        // publishes its current minimum as lowPrice instead of price.
+                        if (isset($offers['price']) || isset($offers['lowPrice'])) {
+                            $extracted['price'] = (float) ($offers['price'] ?? $offers['lowPrice']);
                         }
                         if (! empty($offers['priceCurrency'])) {
                             $extracted['currency'] = (string) $offers['priceCurrency'];
